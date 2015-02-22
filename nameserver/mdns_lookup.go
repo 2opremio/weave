@@ -38,3 +38,7 @@ func (client *MDNSClient) LookupInaddr(inaddr string) (string, error) {
 		return "", e
 	}
 }
+
+func (client *MDNSClient) LookupSrv(service string, proto string, name string) ([]SrvRecordValue, error) {
+	return nil, nil
+}

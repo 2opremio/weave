@@ -40,7 +40,7 @@ func TestServerSimpleQuery(t *testing.T) {
 	log.Println("TestServerSimpleQuery starting")
 	var zone = new(ZoneDb)
 	ip, _, _ := net.ParseCIDR(testAddr1)
-	zone.AddRecord(containerID, testName, ip)
+	zone.AddARecord(ARecord{containerID, testName, ip})
 
 	mdnsServer, err := NewMDNSServer(zone)
 	wt.AssertNoErr(t, err)

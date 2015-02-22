@@ -61,7 +61,8 @@ func ListenHttp(domain string, db Zone, port int) {
 
 			if dns.IsSubDomain(domain, name) {
 				Info.Printf("[http] Adding %s -> %s", name, ipStr)
-				if err = db.AddRecord(ident, name, ip); err != nil {
+				record := ARecord{ident, name, ip}
+				if err = db.AddARecord(record); err != nil {
 					if _, ok := err.(DuplicateError); !ok {
 						httpErrorAndLog(
 							Error, w, "Internal error", http.StatusInternalServerError,
@@ -86,7 +87,7 @@ func ListenHttp(domain string, db Zone, port int) {
 				return
 			}
 			Info.Printf("[http] Deleting %s (%s)", ident, ipStr)
-			if err = db.DeleteRecord(ident, ip); err != nil {
+			if err = db.DeleteARecord(ident, ip); err != nil {
 				if _, ok := err.(LookupError); !ok {
 					httpErrorAndLog(
 						Error, w, "Internal error", http.StatusInternalServerError,

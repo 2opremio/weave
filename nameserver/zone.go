@@ -17,26 +17,47 @@ var rdnsDomainLen = len(RDNS_DOMAIN) + 1
 type Lookup interface {
 	LookupName(name string) (net.IP, error)
 	LookupInaddr(inaddr string) (string, error)
+	LookupSrv(service string, proto string, name string) ([]SrvRecordValue, error)
 }
 
 type Zone interface {
-	AddRecord(ident string, name string, ip net.IP) error
-	DeleteRecord(ident string, ip net.IP) error
+	AddARecord(record ARecord) error
+	AddSrvRecord(record SrvRecord) error
+	DeleteARecord(ident string, ip net.IP) error
+	DeleteSrvRecord(ident string, service string, port int, target string) error
 	DeleteRecordsFor(ident string) error
 	Lookup
 }
 
-type Record struct {
+type ARecord struct {
 	Ident string
 	Name  string
 	IP    net.IP
 }
 
+type SrvRecordValue struct {
+	TTL      int
+	Priority int
+	Weight   int
+	Port     int
+	Target   string
+}
+
+type SrvRecord struct {
+	Ident   string
+	Service string
+	Proto   string
+	Name    string
+	value   SrvRecordValue
+}
+
 // Very simple data structure for now, with linear searching.
-// TODO: make more sophisticated to improve performance.
+// TODO: make more sophisticated to improve performance
+//       (including an identity lookup table to speedup DeleteRecordsFor).
 type ZoneDb struct {
-	mx   sync.RWMutex
-	recs []Record
+	mx      sync.RWMutex
+	aRecs   []ARecord
+	srvRecs []SrvRecord
 }
 
 type LookupError string
@@ -52,8 +73,8 @@ func (dup DuplicateError) Error() string {
 	return "Tried to add a duplicate entry"
 }
 
-func (zone *ZoneDb) indexOf(match func(Record) bool) int {
-	for i, r := range zone.recs {
+func (zone *ZoneDb) indexOf(match func(ARecord) bool) int {
+	for i, r := range zone.aRecs {
 		if match(r) {
 			return i
 		}
@@ -64,7 +85,7 @@ func (zone *ZoneDb) indexOf(match func(Record) bool) int {
 func (zone *ZoneDb) LookupName(name string) (net.IP, error) {
 	zone.mx.RLock()
 	defer zone.mx.RUnlock()
-	for _, r := range zone.recs {
+	for _, r := range zone.aRecs {
 		if r.Name == name {
 			return r.IP, nil
 		}
@@ -79,7 +100,7 @@ func (zone *ZoneDb) LookupInaddr(inaddr string) (string, error) {
 		Debug.Printf("[zonedb] Looking for address: %+v", ip)
 		zone.mx.RLock()
 		defer zone.mx.RUnlock()
-		for _, r := range zone.recs {
+		for _, r := range zone.aRecs {
 			if r.IP.Equal(ip) {
 				return r.Name, nil
 			}
@@ -91,31 +112,45 @@ func (zone *ZoneDb) LookupInaddr(inaddr string) (string, error) {
 	}
 }
 
-func (zone *ZoneDb) AddRecord(ident string, name string, ip net.IP) error {
+func (zone *ZoneDb) LookupSrv(service string, proto string, name string) ([]SrvRecordValue, error) {
+	return nil, nil
+}
+
+func (zone *ZoneDb) AddARecord(r ARecord) error {
 	zone.mx.Lock()
 	defer zone.mx.Unlock()
-	fqdn := dns.Fqdn(name)
+	fqdn := dns.Fqdn(r.Name)
 	if index := zone.indexOf(
-		func(r Record) bool {
-			return r.Name == fqdn && r.IP.Equal(ip) && r.Ident == ident
+		func(lr ARecord) bool {
+			return lr.Name == fqdn &&
+				lr.IP.Equal(r.IP) &&
+				lr.Ident == r.Ident
 		}); index != -1 {
 		return DuplicateError{}
 	}
-	zone.recs = append(zone.recs, Record{ident, fqdn, ip})
+	zone.aRecs = append(zone.aRecs, ARecord{r.Ident, fqdn, r.IP})
 	return nil
 }
 
-func (zone *ZoneDb) DeleteRecord(ident string, ip net.IP) error {
+func (zone *ZoneDb) AddSrvRecord(r SrvRecord) error {
+	return nil
+}
+
+func (zone *ZoneDb) DeleteARecord(ident string, ip net.IP) error {
 	zone.mx.Lock()
 	defer zone.mx.Unlock()
 	if index := zone.indexOf(
-		func(r Record) bool {
+		func(r ARecord) bool {
 			return r.Ident == ident && r.IP.Equal(ip)
 		}); index == -1 {
 		return LookupError(ident)
 	} else {
-		zone.recs = append(zone.recs[:index], zone.recs[index+1:]...)
+		zone.aRecs = append(zone.aRecs[:index], zone.aRecs[index+1:]...)
 	}
+	return nil
+}
+
+func (zone *ZoneDb) DeleteSrvRecord(ident string, service string, port int, target string) error {
 	return nil
 }
 
@@ -124,12 +159,21 @@ func (zone *ZoneDb) DeleteRecordsFor(ident string) error {
 	defer zone.mx.Unlock()
 	w := 0 // write index
 
-	for _, r := range zone.recs {
+	for _, r := range zone.aRecs {
 		if r.Ident != ident {
-			zone.recs[w] = r
+			zone.aRecs[w] = r
 			w++
 		}
 	}
-	zone.recs = zone.recs[:w]
+	zone.aRecs = zone.aRecs[:w]
+
+	for _, r := range zone.srvRecs {
+		if r.Ident != ident {
+			zone.srvRecs[w] = r
+			w++
+		}
+	}
+	zone.srvRecs = zone.srvRecs[:w]
+
 	return nil
 }

@@ -17,13 +17,15 @@ func TestZone(t *testing.T) {
 	var zone = new(ZoneDb)
 
 	ip, _, _ := net.ParseCIDR(testAddr1)
-	err := zone.AddRecord(containerID, successTestName, ip)
+	err := zone.AddARecord(ARecord{containerID, successTestName, ip})
 	wt.AssertNoErr(t, err)
 
 	// Add a few more records to make the job harder
-	err = zone.AddRecord("abcdef0123", "adummy.weave.", net.ParseIP("10.0.0.1"))
+	record := ARecord{"abcdef0123", "adummy.weave.", net.ParseIP("10.0.0.1")}
+	err = zone.AddARecord(record)
 	wt.AssertNoErr(t, err)
-	err = zone.AddRecord("0123abcdef", "zdummy.weave.", net.ParseIP("10.0.0.2"))
+	record = ARecord{"0123abcdef", "zdummy.weave.", net.ParseIP("10.0.0.2")}
+	err = zone.AddARecord(record)
 	wt.AssertNoErr(t, err)
 
 	// Check that the address is now there.
@@ -42,18 +44,20 @@ func TestZone(t *testing.T) {
 		t.Fatal("Unexpected result for", ip, foundName)
 	}
 
-	err = zone.AddRecord(containerID, successTestName, ip)
+	record = ARecord{containerID, successTestName, ip}
+	err = zone.AddARecord(record)
 	wt.AssertErrorType(t, err, (*DuplicateError)(nil), "duplicate add")
 
-	err = zone.AddRecord(otherContainerID, successTestName, ip)
+	record = ARecord{otherContainerID, successTestName, ip}
+	err = zone.AddARecord(record)
 	// Delete the record for the original container
-	err = zone.DeleteRecord(containerID, ip)
+	err = zone.DeleteARecord(containerID, ip)
 	wt.AssertNoErr(t, err)
 
 	_, err = zone.LookupName(successTestName)
 	wt.AssertNoErr(t, err)
 
-	err = zone.DeleteRecord(otherContainerID, ip)
+	err = zone.DeleteARecord(otherContainerID, ip)
 	wt.AssertNoErr(t, err)
 
 	// Check that the address is not there now.
@@ -61,7 +65,7 @@ func TestZone(t *testing.T) {
 	wt.AssertErrorType(t, err, (*LookupError)(nil), "after deleting record")
 
 	// Delete a record that isn't there
-	err = zone.DeleteRecord(containerID, net.ParseIP("0.0.0.0"))
+	err = zone.DeleteARecord(containerID, net.ParseIP("0.0.0.0"))
 	wt.AssertErrorType(t, err, (*LookupError)(nil), "when deleting record that doesn't exist")
 }
 
@@ -75,7 +79,8 @@ func TestDeleteFor(t *testing.T) {
 	zone := new(ZoneDb)
 	for _, addr := range []string{addr1, addr2} {
 		ip, _, _ := net.ParseCIDR(addr)
-		err := zone.AddRecord(id, name, ip)
+		record := ARecord{id, name, ip}
+		err := zone.AddARecord(record)
 		wt.AssertNoErr(t, err)
 	}
 

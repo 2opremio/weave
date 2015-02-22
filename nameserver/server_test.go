@@ -30,7 +30,7 @@ func TestDNSServer(t *testing.T) {
 	common.InitDefaultLogging(true)
 	var zone = new(ZoneDb)
 	ip, _, _ := net.ParseCIDR(testCIDR1)
-	zone.AddRecord(containerID, successTestName, ip)
+	zone.AddARecord(ARecord{containerID, successTestName, ip})
 
 	// Run another DNS server for fallback
 	s, fallbackAddr, err := RunLocalUDPServer("127.0.0.1:0")
